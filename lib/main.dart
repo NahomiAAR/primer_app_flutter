@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:english_words/english_words.dart';
+import 'package:flutter/rendering.dart';
 import 'package:provider/provider.dart';
 
 void main() {
@@ -28,18 +29,25 @@ class MyApp extends StatelessWidget {
 
 class MyAppState extends ChangeNotifier {
   var current = WordPair.random();
-  var favlist = <WordPair>[];
+  var favoritos = <WordPair>[];
+  var historial = <WordPair>[];
+  GlobalKey? historialListKey;
 
   void getSiguiente() {
+    historial.insert(0, current);
+    var animatedList = historialListKey?.currentState as AnimatedListState?;
+    animatedList?.insertItem(0);
+
     current = WordPair.random();
     notifyListeners();
   }
 
-  void toggleFav() {
-    if (favlist.contains(current)) {
-      favlist.remove(current);
+  void toggleFavoritos({WordPair? idea}) {
+    idea = idea ?? current;
+    if (favoritos.contains(current)) {
+      favoritos.remove(current);
     } else {
-      favlist.add(current);
+      favoritos.add(current);
     }
     notifyListeners();
   }
@@ -60,41 +68,43 @@ class _MyHomePageState extends State<MyHomePage> {
         page = GeneratorPage();
         break;
       case 1:
-        page = Placeholder();
+        page = FavoritosPage();
         break;
       default:
         throw UnimplementedError("No hay un widget para: $selectedIndex");
     }
 
-    return Scaffold(
-      body: Row(
-        children: [
-          SafeArea(
-            child: NavigationRail(
-              extended: false,
-              destinations: [
-                NavigationRailDestination(
-                    icon: Icon(Icons.home), label: Text('Inicio')),
-                NavigationRailDestination(
-                    icon: Icon(Icons.favorite), label: Text('Favoritos')),
-              ],
-              selectedIndex: selectedIndex,
-              onDestinationSelected: (value) {
-                setState(() {
-                  selectedIndex = value;
-                });
-                print("Selección: $value");
-              },
+    return LayoutBuilder(builder: (context, constraints) {
+      return Scaffold(
+        body: Row(
+          children: [
+            SafeArea(
+              child: NavigationRail(
+                extended: constraints.maxWidth >= 600,
+                destinations: [
+                  NavigationRailDestination(
+                      icon: Icon(Icons.home), label: Text('Inicio')),
+                  NavigationRailDestination(
+                      icon: Icon(Icons.favorite), label: Text('Favoritos')),
+                ],
+                selectedIndex: selectedIndex,
+                onDestinationSelected: (value) {
+                  setState(() {
+                    selectedIndex = value;
+                  });
+                  print("Selección: $value");
+                },
+              ),
             ),
-          ),
-          Expanded(
-              child: Container(
-            color: Theme.of(context).colorScheme.primaryContainer,
-            child: page,
-          )),
-        ],
-      ),
-    );
+            Expanded(
+                child: Container(
+              color: Theme.of(context).colorScheme.primaryContainer,
+              child: page,
+            )),
+          ],
+        ),
+      );
+    });
   }
 }
 
@@ -132,7 +142,7 @@ class GeneratorPage extends StatelessWidget {
     var appState = context.watch<MyAppState>();
     var idea = appState.current;
     IconData icon;
-    if (appState.favlist.contains(idea)) {
+    if (appState.favoritos.contains(idea)) {
       icon = Icons.favorite;
     } else {
       icon = Icons.favorite_border_outlined;
@@ -142,16 +152,20 @@ class GeneratorPage extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
+          Expanded(flex: 3, child: HistorialListView()),
+          SizedBox(
+            height: 20,
+          ),
           BigCard(idea: appState.current),
           SizedBox(
-            height: 15,
+            height: 20,
           ),
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               ElevatedButton.icon(
                 onPressed: () {
-                  appState.toggleFav();
+                  appState.toggleFavoritos();
                 },
                 icon: Icon(icon),
                 label: Text('Me gusta'),
@@ -166,9 +180,91 @@ class GeneratorPage extends StatelessWidget {
                   },
                   child: Text("Siguiente")),
             ],
-          )
+          ),
+          Spacer(flex: 2),
         ],
       ),
+    );
+  }
+}
+
+class FavoritosPage extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    var appState = context.watch<MyAppState>();
+
+    if (appState.favoritos.isEmpty) {
+      return Center(
+        child: Text("Aun no hay favoritos"),
+      );
+    }
+
+    return ListView(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(20),
+          child: Text("Se han elegido ${appState.favoritos.length} favoritos"),
+        ),
+        for (var idea in appState.favoritos)
+          ListTile(
+            leading: Icon(Icons.favorite),
+            title: Text(idea.asLowerCase),
+          )
+      ],
+    );
+  }
+}
+
+class HistorialListView extends StatefulWidget {
+  const HistorialListView({Key? key}) : super(key: key);
+
+  @override
+  State<HistorialListView> createState() => HistorialListViewState();
+}
+
+class HistorialListViewState extends State<HistorialListView> {
+  final _key = GlobalKey();
+  static const Gradient _maskingGradient = LinearGradient(
+      colors: [Colors.transparent, Colors.black],
+      stops: [0.0, 0.5],
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter);
+
+  @override
+  Widget build(BuildContext context) {
+    final appState = context.watch<MyAppState>();
+    appState.historialListKey = _key;
+
+    return ShaderMask(
+      shaderCallback: (bounds) => _maskingGradient.createShader(bounds),
+      blendMode: BlendMode.dstIn,
+      child: AnimatedList(
+          key: _key,
+          reverse: true,
+          padding: EdgeInsets.only(top: 100),
+          initialItemCount: appState.historial.length,
+          itemBuilder: (context, index, animation) {
+            final idea = appState.historial[index];
+            return SizeTransition(
+              sizeFactor: animation,
+              child: Center(
+                child: TextButton.icon(
+                    onPressed: () {
+                      appState.toggleFavoritos(idea: idea);
+                    },
+                    icon: appState.favoritos.contains(idea)
+                        ? Icon(
+                            Icons.favorite,
+                            size: 12,
+                          )
+                        : SizedBox(),
+                    label: Text(
+                      idea.asLowerCase,
+                      semanticsLabel: idea.asPascalCase,
+                    )),
+              ),
+            );
+          }),
     );
   }
 }
