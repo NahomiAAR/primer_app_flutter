@@ -14,12 +14,13 @@ class MyApp extends StatelessWidget {
     return ChangeNotifierProvider(
       create: (context) => MyAppState(),
       child: MaterialApp(
+        debugShowCheckedModeBanner: false,
         title: 'Flutter Demo',
         theme: ThemeData(
           colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
           useMaterial3: true,
         ),
-        home: const MyHomePage(title: 'Flutter Demo Home Page'),
+        home: MyHomePage(),
       ),
     );
   }
@@ -27,69 +28,71 @@ class MyApp extends StatelessWidget {
 
 class MyAppState extends ChangeNotifier {
   var current = WordPair.random();
-  var favoritos = <WordPair>[];
+  var favlist = <WordPair>[];
 
-  void cambiarPalabras() {
+  void getSiguiente() {
     current = WordPair.random();
     notifyListeners();
   }
 
-  void toggleFavoritos() {
-    if (favoritos.contains(current)) {
-      favoritos.remove(current);
+  void toggleFav() {
+    if (favlist.contains(current)) {
+      favlist.remove(current);
     } else {
-      favoritos.add(current);
+      favlist.add(current);
     }
     notifyListeners();
   }
 }
 
-class MyHomePage extends StatelessWidget {
-  const MyHomePage({super.key, required this.title});
+class MyHomePage extends StatefulWidget {
+  @override
+  State<MyHomePage> createState() => _MyHomePageState();
+}
 
-  final String title;
-
+class _MyHomePageState extends State<MyHomePage> {
+  var selectedIndex = 0;
   @override
   Widget build(BuildContext context) {
-    var appState = context.watch<MyAppState>();
-    var idea = appState.current;
-    IconData icon;
-    if (appState.favoritos.contains(idea)) {
-      icon = Icons.favorite;
-    } else {
-      icon = Icons.favorite_outline;
+    Widget page;
+    switch (selectedIndex) {
+      case 0:
+        page = GeneratorPage();
+        break;
+      case 1:
+        page = Placeholder();
+        break;
+      default:
+        throw UnimplementedError("No hay un widget para: $selectedIndex");
     }
 
     return Scaffold(
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            BigCard(idea: appState.current),
-            SizedBox(
-              height: 20,
-            ),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                ElevatedButton.icon(
-                    onPressed: () {
-                      appState.toggleFavoritos();
-                    },
-                    icon: Icon(icon),
-                    label: Text("Me gusta")),
-                SizedBox(
-                  width: 10,
-                ),
-                ElevatedButton(
-                    onPressed: () {
-                      appState.cambiarPalabras();
-                    },
-                    child: Text("Cambiar Palabras")),
+      body: Row(
+        children: [
+          SafeArea(
+            child: NavigationRail(
+              extended: false,
+              destinations: [
+                NavigationRailDestination(
+                    icon: Icon(Icons.home), label: Text('Inicio')),
+                NavigationRailDestination(
+                    icon: Icon(Icons.favorite), label: Text('Favoritos')),
               ],
+              selectedIndex: selectedIndex,
+              onDestinationSelected: (value) {
+                setState(() {
+                  selectedIndex = value;
+                });
+                print("Selección: $value");
+              },
             ),
-          ],
-        ),
+          ),
+          Expanded(
+              child: Container(
+            color: Theme.of(context).colorScheme.primaryContainer,
+            child: page,
+          )),
+        ],
       ),
     );
   }
@@ -97,24 +100,74 @@ class MyHomePage extends StatelessWidget {
 
 class BigCard extends StatelessWidget {
   final WordPair idea;
+
   const BigCard({super.key, required this.idea});
 
   @override
   Widget build(BuildContext context) {
-    final tema = Theme.of(context);
-    final textStyle = tema.textTheme.displayMedium!.copyWith(
-      color: tema.colorScheme.onPrimary,
+    final theme = Theme.of(context);
+    final TextStyle = theme.textTheme.displayMedium!.copyWith(
+      color: theme.colorScheme.onPrimary,
     );
 
     return Card(
-      color: tema.colorScheme.primary,
+      color: theme.primaryColor,
       child: Padding(
         padding: const EdgeInsets.all(20.0),
         child: Text(
           idea.asLowerCase,
-          style: textStyle,
+          style: TextStyle,
           semanticsLabel: "${idea.first} ${idea.second}",
         ),
+      ),
+    );
+  }
+}
+
+class GeneratorPage extends StatelessWidget {
+  const GeneratorPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    var appState = context.watch<MyAppState>();
+    var idea = appState.current;
+    IconData icon;
+    if (appState.favlist.contains(idea)) {
+      icon = Icons.favorite;
+    } else {
+      icon = Icons.favorite_border_outlined;
+    }
+
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          BigCard(idea: appState.current),
+          SizedBox(
+            height: 15,
+          ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ElevatedButton.icon(
+                onPressed: () {
+                  appState.toggleFav();
+                },
+                icon: Icon(icon),
+                label: Text('Me gusta'),
+              ),
+              SizedBox(
+                width: 20,
+              ),
+              ElevatedButton(
+                  onPressed: () {
+                    print("Botón presionado!");
+                    appState.getSiguiente();
+                  },
+                  child: Text("Siguiente")),
+            ],
+          )
+        ],
       ),
     );
   }
